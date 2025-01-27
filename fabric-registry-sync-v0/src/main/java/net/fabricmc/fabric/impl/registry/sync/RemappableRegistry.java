@@ -37,9 +37,13 @@ public interface RemappableRegistry {
 		 * client).
 		 */
 		REMOTE,
+		/**
+		 * No differences in entry sets are allowed.
+		 */
+		EXACT
 	}
 
-	void remap(Object2IntMap<Identifier> remoteIndexedEntries, RemapMode mode) throws RemapException;
+	void remap(String name, Object2IntMap<Identifier> remoteIndexedEntries, RemapMode mode) throws RemapException;
 
-	void unmap() throws RemapException;
+	void unmap(String name) throws RemapException;
 }

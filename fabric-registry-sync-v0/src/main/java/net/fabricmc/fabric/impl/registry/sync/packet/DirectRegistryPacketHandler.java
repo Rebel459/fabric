@@ -17,9 +17,7 @@
 package net.fabricmc.fabric.impl.registry.sync.packet;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
-import java.util.EnumSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -35,12 +33,8 @@ import org.jetbrains.annotations.Nullable;
 import net.minecraft.network.PacketByteBuf;
 import net.minecraft.network.codec.PacketCodec;
 import net.minecraft.network.packet.CustomPayload;
-import net.minecraft.registry.Registries;
-import net.minecraft.registry.Registry;
 import net.minecraft.util.Identifier;
 
-import net.fabricmc.fabric.api.event.registry.RegistryAttribute;
-import net.fabricmc.fabric.api.event.registry.RegistryAttributeHolder;
 import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
 
 /**
@@ -71,9 +65,6 @@ public class DirectRegistryPacketHandler extends RegistryPacketHandler<DirectReg
 	@Nullable
 	private Map<Identifier, Object2IntMap<Identifier>> syncedRegistryMap;
 
-	@Nullable
-	private Map<Identifier, EnumSet<RegistryAttribute>> syncedRegistryAttributes;
-
 	private boolean isPacketFinished = false;
 	private int totalPacketReceived = 0;
 
@@ -98,7 +89,6 @@ public class DirectRegistryPacketHandler extends RegistryPacketHandler<DirectReg
 
 			for (Identifier regId : regIds) {
 				buf.writeString(regId.getPath());
-				buf.writeByte(encodeRegistryAttributes(regId));
 
 				Object2IntMap<Identifier> idMap = registryMap.get(regId);
 
@@ -191,7 +181,6 @@ public class DirectRegistryPacketHandler extends RegistryPacketHandler<DirectReg
 
 		computeBufSize(combinedBuf);
 		syncedRegistryMap = new LinkedHashMap<>();
-		syncedRegistryAttributes = new LinkedHashMap<>();
 		int regNamespaceGroupAmount = combinedBuf.readVarInt();
 
 		for (int i = 0; i < regNamespaceGroupAmount; i++) {
@@ -200,7 +189,6 @@ public class DirectRegistryPacketHandler extends RegistryPacketHandler<DirectReg
 
 			for (int j = 0; j < regNamespaceGroupLength; j++) {
 				String regPath = combinedBuf.readString();
-				EnumSet<RegistryAttribute> attributes = decodeRegistryAttributes(combinedBuf.readByte());
 				Object2IntMap<Identifier> idMap = new Object2IntLinkedOpenHashMap<>();
 				int idNamespaceGroupAmount = combinedBuf.readVarInt();
 
@@ -226,9 +214,7 @@ public class DirectRegistryPacketHandler extends RegistryPacketHandler<DirectReg
 					}
 				}
 
-				Identifier registryId = Identifier.of(regNamespace, regPath);
-				syncedRegistryMap.put(registryId, idMap);
-				syncedRegistryAttributes.put(registryId, attributes);
+				syncedRegistryMap.put(Identifier.of(regNamespace, regPath), idMap);
 			}
 		}
 
@@ -249,22 +235,13 @@ public class DirectRegistryPacketHandler extends RegistryPacketHandler<DirectReg
 
 	@Override
 	@Nullable
-	public SyncedPacketData getSyncedPacketData() {
+	public Map<Identifier, Object2IntMap<Identifier>> getSyncedRegistryMap() {
 		Preconditions.checkState(isPacketFinished);
-
-		if (syncedRegistryMap == null || syncedRegistryAttributes == null) {
-			return null;
-		}
-
-		Map<Identifier, Object2IntMap<Identifier>> map = Collections.unmodifiableMap(syncedRegistryMap);
-		Map<Identifier, EnumSet<RegistryAttribute>> attributes = Collections.unmodifiableMap(syncedRegistryAttributes);
-
+		Map<Identifier, Object2IntMap<Identifier>> map = syncedRegistryMap;
 		isPacketFinished = false;
 		totalPacketReceived = 0;
 		syncedRegistryMap = null;
-		syncedRegistryAttributes = null;
-
-		return new SyncedPacketData(map, attributes);
+		return map;
 	}
 
 	private DirectRegistryPacketHandler.Payload createPayload(PacketByteBuf buf) {
@@ -305,33 +282,5 @@ public class DirectRegistryPacketHandler extends RegistryPacketHandler<DirectReg
 		public Id<? extends CustomPayload> getId() {
 			return ID;
 		}
-	}
-
-	private static byte encodeRegistryAttributes(Identifier identifier) {
-		Registry<?> registry = Registries.REGISTRIES.get(identifier);
-
-		if (registry == null) {
-			return 0;
-		}
-
-		RegistryAttributeHolder holder = RegistryAttributeHolder.get(registry);
-		byte encoded = 0;
-
-		// Only send the optional marker.
-		if (holder.hasAttribute(RegistryAttribute.OPTIONAL)) {
-			encoded |= 0x1;
-		}
-
-		return encoded;
-	}
-
-	private static EnumSet<RegistryAttribute> decodeRegistryAttributes(byte encoded) {
-		EnumSet<RegistryAttribute> attributes = EnumSet.noneOf(RegistryAttribute.class);
-
-		if ((encoded & 0x1) != 0) {
-			attributes.add(RegistryAttribute.OPTIONAL);
-		}
-
-		return attributes;
 	}
 }
