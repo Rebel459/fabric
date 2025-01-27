@@ -77,9 +77,6 @@ public abstract class SimpleRegistryMixin<T> implements MutableRegistry<T>, Rema
 	@Unique
 	private static final Set<String> VANILLA_NAMESPACES = Set.of("minecraft", "brigadier");
 
-	@Unique
-	private static final Logger LOGGER = LoggerFactory.getLogger("FabricRegistrySync");
-
 	@Shadow
 	@Final
 	private ObjectList<RegistryEntry.Reference<T>> rawIdToEntry;
@@ -143,7 +140,7 @@ public abstract class SimpleRegistryMixin<T> implements MutableRegistry<T>, Rema
 	}
 
 	@Inject(method = "<init>(Lnet/minecraft/registry/RegistryKey;Lcom/mojang/serialization/Lifecycle;Z)V", at = @At("RETURN"))
-	private void init(RegistryKey key, Lifecycle lifecycle, boolean intrusive, CallbackInfo ci) {
+	private void init(RegistryKey<?> key, Lifecycle lifecycle, boolean intrusive, CallbackInfo ci) {
 		fabric_addObjectEvent = EventFactory.createArrayBacked(RegistryEntryAddedCallback.class,
 			(callbacks) -> (rawId, id, object) -> {
 				for (RegistryEntryAddedCallback<T> callback : callbacks) {
@@ -197,7 +194,7 @@ public abstract class SimpleRegistryMixin<T> implements MutableRegistry<T>, Rema
 	}
 
 	@Override
-	public void remap(String name, Object2IntMap<Identifier> remoteIndexedEntries, RemapMode mode) throws RemapException {
+	public void remap(Object2IntMap<Identifier> remoteIndexedEntries, RemapMode mode) throws RemapException {
 		// Throw on invalid conditions.
 		switch (mode) {
 		case AUTHORITATIVE:
@@ -216,34 +213,7 @@ public abstract class SimpleRegistryMixin<T> implements MutableRegistry<T>, Rema
 			}
 
 			if (strings != null) {
-				StringBuilder builder = new StringBuilder("Received ID map for " + name + " contains IDs unknown to the receiver!");
-
-				for (String s : strings) {
-					builder.append('\n').append(s);
-				}
-
-				throw new RemapException(builder.toString());
-			}
-
-			break;
-		}
-		case EXACT: {
-			if (!idToEntry.keySet().equals(remoteIndexedEntries.keySet())) {
-				List<String> strings = new ArrayList<>();
-
-				for (Identifier remoteId : remoteIndexedEntries.keySet()) {
-					if (!idToEntry.containsKey(remoteId)) {
-						strings.add(" - " + remoteId + " (missing on local)");
-					}
-				}
-
-				for (Identifier localId : getIds()) {
-					if (!remoteIndexedEntries.containsKey(localId)) {
-						strings.add(" - " + localId + " (missing on remote)");
-					}
-				}
-
-				StringBuilder builder = new StringBuilder("Local and remote ID sets for " + name + " do not match!");
+				StringBuilder builder = new StringBuilder("Received ID map for " + getKey() + " contains IDs unknown to the receiver!");
 
 				for (String s : strings) {
 					builder.append('\n').append(s);
@@ -382,7 +352,7 @@ public abstract class SimpleRegistryMixin<T> implements MutableRegistry<T>, Rema
 	}
 
 	@Override
-	public void unmap(String name) throws RemapException {
+	public void unmap() throws RemapException {
 		if (fabric_prevIndexedEntries != null) {
 			List<Identifier> addedIds = new ArrayList<>();
 
@@ -404,7 +374,7 @@ public abstract class SimpleRegistryMixin<T> implements MutableRegistry<T>, Rema
 				keyToEntry.put(entryKey, entry.getValue());
 			}
 
-			remap(name, fabric_prevIndexedEntries, RemapMode.AUTHORITATIVE);
+			remap(fabric_prevIndexedEntries, RemapMode.AUTHORITATIVE);
 
 			for (Identifier id : addedIds) {
 				fabric_getAddObjectEvent().invoker().onEntryAdded(entryToRawId.getInt(idToEntry.get(id)), id, get(id));
