@@ -25,10 +25,5 @@ public enum RegistryAttribute {
 	/**
 	 * Registry has been modded.
 	 */
-	MODDED,
-
-	/**
-	 * Registry is optional, any connecting client will not be disconnected if the registry is not present.
-	 */
-	OPTIONAL
+	MODDED
 }
